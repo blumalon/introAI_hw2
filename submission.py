@@ -55,6 +55,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     opp_utility = evaluate_robot_state(other_robot)
     return my_utility - opp_utility
 
+
 class AgentGreedyImproved(AgentGreedy):
     def heuristic(self, env: WarehouseEnv, robot_id: int):
         return smart_heuristic(env, robot_id)

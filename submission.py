@@ -15,42 +15,55 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     estimated_total_steps = 200 
     progress = 1.0 - (current_steps_remaining / estimated_total_steps)
     early_phase = 1.0 - progress
+    
     def evaluate_robot_state(r):
         score_val = r.credit
-        
-        # Battery Logic
-        if r.battery < 6:
-            battery_val = (r.battery - 10) * 1.5 
+        stations = env.charge_stations
+        dist_to_station = min(manhattan_distance(r.position, s.position) for s in stations)
+        critical_threshold = dist_to_station + 3
+        #Battery Logic
+        if r.battery < critical_threshold:
+            battery_val = (r.battery - critical_threshold) * 2 
         elif r.battery >= current_steps_remaining:
             battery_val = 0 
         else:
             battery_val = r.battery * 0.5 * early_phase
-
-        # Task Logic
+        #Task Logic
         task_val = 0
-        center = (2, 2) 
+        center = (2, 2)
+        future_packages = [p for p in env.packages if not p.on_board]
         if r.package is not None:
             dist_dest = manhattan_distance(r.position, r.package.destination)
             reward = manhattan_distance(r.package.position, r.package.destination) * 2
             dist_center = manhattan_distance(r.package.destination, center)
             center_penalty = dist_center * 0.1
+            future_bonus = 0
+            if future_packages:
+                min_dist_future = min(manhattan_distance(r.package.destination, fp.position) for fp in future_packages)
+                future_bonus = (10 - min_dist_future) * 0.1 
             
-            task_val = (reward - dist_dest) * (1.0 - center_penalty)
+            task_val = (reward - dist_dest) * (1.0 - center_penalty) + future_bonus
             
         else:
             available_packages = [p for p in env.packages if p.on_board]
-            best_pkg_val = -math.inf
+            best_pkg_val = float("-inf")
             for p in available_packages:
                 dist_to_pkg = manhattan_distance(r.position, p.position)
                 dist_to_dest = manhattan_distance(p.position, p.destination)
                 reward = dist_to_dest * 2
                 dist_center = manhattan_distance(p.destination, center)
                 center_penalty = dist_center * 0.1
-                val = (reward - (dist_to_pkg + dist_to_dest)) * (1.0 - center_penalty)
+                future_bonus = 0
+                if future_packages:
+                    min_dist_future = min(manhattan_distance(p.destination, fp.position) for fp in future_packages)
+                    future_bonus = (10 - min_dist_future) * 0.2
+                
+                val = (reward - (dist_to_pkg + dist_to_dest)) * (1.0 - center_penalty) + future_bonus
                 if val > best_pkg_val:
                     best_pkg_val = val
             
-            task_val = best_pkg_val * early_phase
+            task_val = best_pkg_val
+            
         return (score_val * w1) + (battery_val * w2) + (task_val * w3)
 
     my_utility = evaluate_robot_state(robot)
@@ -113,8 +126,71 @@ class AgentMinimax(Agent):
 
 class AgentAlphaBeta(Agent):
     # TODO: section c : 1
+    def run_state_alpha_beta(self, env: WarehouseEnv, agent_id, am_i_max: bool,
+                             depth: int, alpha: float, beta: float, start_time, run_limit):
+        
+        if (time.time() - start_time) > run_limit:
+            raise TimeoutError
+            
+        if depth == 0:
+            return (None, smart_heuristic(env, agent_id))
+            
+        best_op = None
+        
+        if am_i_max:
+            max_eval = float('-inf')
+            for op in env.get_legal_operators(agent_id):
+                child_env = env.clone()
+                child_env.apply_operator(agent_id, op)
+                _, eval_val = self.run_state_alpha_beta(child_env, (agent_id + 1) % 2, 
+                                                        False, depth - 1, alpha, beta, start_time, run_limit)
+                
+                if eval_val > max_eval:
+                    max_eval = eval_val
+                    best_op = op
+                alpha = max(alpha, eval_val)
+                if beta <= alpha:
+                    break 
+                    
+            return (best_op, max_eval)
+            
+        else:
+            min_eval = float('inf')
+            for op in env.get_legal_operators(agent_id):
+                child_env = env.clone()
+                child_env.apply_operator(agent_id, op)
+                _, eval_val = self.run_state_alpha_beta(child_env, (agent_id + 1) % 2, 
+                                                        True, depth - 1, alpha, beta, start_time, run_limit)
+                
+                if eval_val < min_eval:
+                    min_eval = eval_val
+                    best_op = op
+                beta = min(beta, eval_val)
+                if beta <= alpha:
+                    break 
+            
+            return (best_op, min_eval)
+
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
-        raise NotImplementedError()
+        start_time = time.time()
+        run_limit = time_limit - 0.1 
+        best_move = None
+        i = 0
+        
+        try:
+            while True:
+                i += 1
+                current_best = self.run_state_alpha_beta(env, agent_id, True, i, 
+                                                         float('-inf'), float('inf'), start_time, run_limit)
+                best_move = current_best[0]
+                
+        except TimeoutError:
+            pass
+            
+        if best_move is None:
+            return random.choice(env.get_legal_operators(agent_id))
+        else:
+            return best_move
 
 
 class AgentExpectimax(Agent):

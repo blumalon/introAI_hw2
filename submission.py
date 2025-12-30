@@ -4,7 +4,7 @@ import random
 import time
 import math
 
-# TODO: section a : 3
+
 def smart_heuristic(env: WarehouseEnv, robot_id: int):
     robot = env.get_robot(robot_id)
     other_robot = env.get_robot((robot_id + 1) % 2)
@@ -46,7 +46,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
             
         else:
             available_packages = [p for p in env.packages if p.on_board]
-            best_pkg_val = float("-inf")
+            best_pkg_val = -math.inf
             for p in available_packages:
                 dist_to_pkg = manhattan_distance(r.position, p.position)
                 dist_to_dest = manhattan_distance(p.position, p.destination)
@@ -125,7 +125,6 @@ class AgentMinimax(Agent):
 
 
 class AgentAlphaBeta(Agent):
-    # TODO: section c : 1
     def run_state_alpha_beta(self, env: WarehouseEnv, agent_id, am_i_max: bool,
                              depth: int, alpha: float, beta: float, start_time, run_limit):
         
@@ -194,9 +193,98 @@ class AgentAlphaBeta(Agent):
 
 
 class AgentExpectimax(Agent):
-    # TODO: section d : 3
+    def run_state_expectimax(self, env: WarehouseEnv, am_i_expectimax: bool,depth, best_move, agent_id, start_time, run_limit):
+        if (time.time() - start_time) > run_limit:
+            raise TimeoutError
+        if (depth == 1):
+            if (am_i_expectimax == False):
+                move_vector = env.get_legal_operators(agent_id)
+                found_left = 0
+                found_pick_package = 0
+                move_values = {}
+                for op in move_vector:
+                    child_env = env.clone()
+                    child_env.apply_operator(agent_id, op)
+                    move_values[op] = smart_heuristic(child_env, agent_id)
+                operator_num = len(move_vector)
+                state_val = 0
+                for op in move_vector:
+                    if (op == 'move west'):
+                        found_left += 1
+                        state_val += move_values[op] * 3
+                    elif (op == "pick up"):
+                        found_pick_package += 1
+                        state_val += move_values[op] * 3
+                    else:
+                        state_val += move_values[op]
+                state_val = state_val / (operator_num + (2 * (found_left + found_pick_package)))
+                best_move = (None, state_val)
+                return best_move
+            else:
+                move_vector = env.get_legal_operators(agent_id)
+                for op in move_vector:
+                    child_env = env.clone()
+                    child_env.apply_operator(agent_id, op)
+                    move_val = smart_heuristic(child_env, agent_id)
+                    if (move_val[1] > best_move[1]):
+                        best_move = (op, move_val[1])
+                return best_move
+        else: #depth is bigger than 1
+            if (am_i_expectimax == False):
+                move_vector = env.get_legal_operators(agent_id)
+                found_left = 0
+                found_pick_package = 0
+                move_values = {}
+                state_val = 0
+                for op in move_vector:
+                    child_env = env.clone()
+                    child_env.apply_operator(agent_id, op)
+                    move_values[op] = self.run_state_expectimax(child_env, True, depth - 1, best_move,
+                                                                (1 + agent_id)%2, start_time, run_limit)
+                    if (op == 'move west'):
+                        found_left += 1
+                        state_val += move_values[op] * 3
+                    elif (op == "pick up"):
+                        found_pick_package += 1
+                        state_val += move_values[op] * 3
+                    else:
+                        state_val += move_values[op]
+                operator_num = len(move_vector)
+                state_val = state_val / (operator_num + (2 * (found_left + found_pick_package)))
+                best_move = (None, state_val)
+                return best_move
+            else:
+                move_vector = env.get_legal_operators(agent_id)
+                for op in move_vector:
+                    child_env = env.clone()
+                    child_env.apply_operator(agent_id, op)
+                    move_val = self.run_state_expectimax(child_env, False, depth - 1, best_move,
+                                                         (1 + agent_id)%2, start_time, run_limit)
+                    if (move_val[1] > best_move[1]):
+                        best_move = (op, move_val[1])
+                return best_move
+            return best_move
+
+
+
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
-        raise NotImplementedError()
+        start_time = time.time()
+        run_limit = time_limit - 0.1
+        best_move = (None, -math.inf)
+        depth = 1
+        try:
+            while True:
+                current_best = self.run_state_expectimax(env, False, depth,
+                                                      (None, -math.inf), agent_id, start_time, run_limit)
+                if (current_best[1] > best_move[1]):
+                    best_move = current_best
+                depth = depth + 1
+        except TimeoutError:
+            pass
+        if (best_move[0] == None):
+            return random.choice(env.get_legal_operators(agent_id))
+        return best_move[0]
+
 
 
 # here you can check specific paths to get to know the environment

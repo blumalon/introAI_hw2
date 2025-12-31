@@ -15,20 +15,23 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     estimated_total_steps = 200 
     progress = 1.0 - (current_steps_remaining / estimated_total_steps)
     early_phase = 1.0 - progress
-    
+    #Battery Logic#
     def evaluate_robot_state(r):
         score_val = r.credit
         stations = env.charge_stations
-        dist_to_station = min(manhattan_distance(r.position, s.position) for s in stations)
+        if stations:
+            dist_to_station = min(manhattan_distance(r.position, s.position) for s in stations)
+        else:
+            dist_to_station = 10
+            
         critical_threshold = dist_to_station + 3
-        #Battery Logic
         if r.battery < critical_threshold:
-            battery_val = (r.battery - critical_threshold) * 2 
+            battery_val = (r.battery - critical_threshold - 5) * 1.5 
         elif r.battery >= current_steps_remaining:
             battery_val = 0 
         else:
             battery_val = r.battery * 0.5 * early_phase
-        #Task Logic
+    #Task Logic#
         task_val = 0
         center = (2, 2)
         future_packages = [p for p in env.packages if not p.on_board]
@@ -42,11 +45,11 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
                 min_dist_future = min(manhattan_distance(r.package.destination, fp.position) for fp in future_packages)
                 future_bonus = (10 - min_dist_future) * 0.1 
             
-            task_val = (reward - dist_dest) * (1.0 - center_penalty) + future_bonus
+            task_val = ((reward - dist_dest) * (1.0 - center_penalty) + future_bonus) * 2.0
             
         else:
             available_packages = [p for p in env.packages if p.on_board]
-            best_pkg_val = -math.inf
+            best_pkg_val = float("-inf")
             for p in available_packages:
                 dist_to_pkg = manhattan_distance(r.position, p.position)
                 dist_to_dest = manhattan_distance(p.position, p.destination)

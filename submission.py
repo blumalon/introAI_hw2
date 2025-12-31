@@ -71,6 +71,8 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
 
     my_utility = evaluate_robot_state(robot)
     opp_utility = evaluate_robot_state(other_robot)
+    to_return = my_utility - opp_utility
+    #print("heuristic val is: " + str(to_return))
     return my_utility - opp_utility
 
 
@@ -82,27 +84,30 @@ class AgentGreedyImproved(AgentGreedy):
 class AgentMinimax(Agent):
     def run_state_minimax(self, env: WarehouseEnv, agent_id, am_i_max: bool,
                           depth: int, best_val, start_time, run_limit):
+        #print ("depth is: " + str(depth))
         if (time.time() - start_time) > run_limit:
             raise TimeoutError
         if (depth == 0):
             return (None, smart_heuristic(env, agent_id))
         if (am_i_max):
-            for op in env.get_legal_operators(0):
+            for op in env.get_legal_operators(agent_id):
                 child_env = env.clone()
-                child_env.apply_operator(0, op)
+                child_env.apply_operator(agent_id, op)
                 child_val = self.run_state_minimax(child_env,(agent_id+1)%2,
-                                                False, depth - 1, (None, -math.inf), start_time, run_limit)
+                                                False, depth - 1, (op, math.inf), start_time, run_limit)
                 if (child_val[1] > best_val[1]):
+                    #print ("ok\n")
                     best_val = (op, child_val[1])
             return best_val
         else:
-            for op in env.get_legal_operators(1):
+            for op in env.get_legal_operators(agent_id):
                 child_env = env.clone()
                 child_env.apply_operator(agent_id, op)
                 child_val = self.run_state_minimax(child_env,(agent_id+1)%2, True, depth - 1,
-                                                (None, math.inf), start_time, run_limit)
+                                                (op, -math.inf), start_time, run_limit)
                 if (child_val[1] < best_val[1]):
                     best_val = (op, child_val[1])
+            #print ("best_op was: " + str(best_val[0]) + " value was: " + str(best_val[1]))
             return best_val
 
 
@@ -113,14 +118,12 @@ class AgentMinimax(Agent):
         try:
             while(True):
                 i += 1
-                if (agent_id):
-                    best_move = self.run_state_minimax(env, agent_id, (agent_id +1)%2, i,
+                best_move = self.run_state_minimax(env, agent_id, (agent_id +1)%2, i,
                                                    (None, -math.inf), start_time, run_limit)
-                else:
-                    best_move = self.run_state_minimax(env, agent_id, (agent_id + 1) % 2, i,
-                                                       (None, math.inf), start_time, run_limit)
+                print("current_best in depth: "+str(i)+" is: "+ str(best_move[0]+" val is: "+str(best_move[1])))
         except TimeoutError:
             pass
+        #print ("move_val was: " + str(best_move[1]))
         if (best_move[0] == None):
             return random.choice(env.get_legal_operators(agent_id)) #to make sure we have default operator to return if time_out
         else:

@@ -10,10 +10,13 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     other_robot = env.get_robot((robot_id + 1) % 2)
     
     # Weights
-    w_score = 50.0 
+    w_score = 20.0
     w_task = 5.0  
-    w_batt = 2.0   
-
+    w_batt = 8.0   
+    current_steps_remaining = env.num_steps
+    estimated_total_steps = 200 
+    progress = 1.0 - (current_steps_remaining / estimated_total_steps)
+    early_phase = 1.0 - progress
     def evaluate_robot_state(r):
         score_val = r.credit
         # Battery Logic
@@ -21,12 +24,15 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
         if stations:
             dist_to_station = min(manhattan_distance(r.position, s.position) for s in stations)
         else:
-            dist_to_station = 10
-        critical = r.battery - dist_to_station
-        if critical > 5:
-            battery_val = critical * 0.5 
+            dist_to_station = 10 
+        critical_threshold = dist_to_station + 3
+        
+        if r.battery < critical_threshold:
+            battery_val = (r.battery - critical_threshold - 5) * 1.5 
+        elif r.battery >= current_steps_remaining:
+            battery_val = 0 
         else:
-            battery_val = (critical * 2.0) - 7.5 
+            battery_val = r.battery * 0.5 * early_phase
 
         #Task Logic
         task_val = 0
@@ -34,11 +40,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
         if r.package is not None:
             dist_dest = manhattan_distance(r.position, r.package.destination)
             reward = manhattan_distance(r.package.position, r.package.destination) * 2
-            future_bonus = 0
-            if future_packages:
-                min_dist_future = min(manhattan_distance(r.package.destination, fp.position) for fp in future_packages)
-                future_bonus = (10 - min_dist_future) * 0.1 
-            task_val = (reward - dist_dest + future_bonus) * 2.0
+            task_val = (reward - dist_dest) * 2.0
             
         else:
             available_packages = [p for p in env.packages if p.on_board]
@@ -58,12 +60,12 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
                 task_val = best_pkg_val
             else:
                 task_val = 0
-            
-        return (score_val * w_score) + (battery_val * w_batt) + (task_val * w_task)
+        print ("score val: " + str(score_val) + " battery val: " + str(battery_val) + " task val: " + str(task_val))
+        return (score_val * w_score) + (battery_val * w_batt)* (score_val/(score_val+battery_val)) + (task_val * w_task)
 
     my_utility = evaluate_robot_state(robot)
     opp_utility = evaluate_robot_state(other_robot)
-    return my_utility - (0.2*opp_utility)
+    return my_utility - (opp_utility)
 
 
 class AgentGreedyImproved(AgentGreedy):
@@ -78,8 +80,6 @@ class AgentMinimax(Agent):
             raise TimeoutError
         if depth == 0:
             val = smart_heuristic(env, agent_id)
-            if not am_i_max:
-                val = -val
             return (None, val)
         if am_i_max:
             current_best = (None, -math.inf) 

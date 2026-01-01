@@ -63,8 +63,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
 
     my_utility = evaluate_robot_state(robot)
     opp_utility = evaluate_robot_state(other_robot)
-    print ("utilty: " + str(my_utility) + "opp utility" + str(opp_utility))
-    return my_utility - opp_utility
+    return my_utility - (0.2*opp_utility)
 
 
 class AgentGreedyImproved(AgentGreedy):

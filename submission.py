@@ -8,44 +8,37 @@ import math
 def smart_heuristic(env: WarehouseEnv, robot_id: int):
     robot = env.get_robot(robot_id)
     other_robot = env.get_robot((robot_id + 1) % 2)
-    w1 = 10.0
-    w2 = 5.0
-    w3 = 8.0
-    current_steps_remaining = env.num_steps
-    estimated_total_steps = 200 
-    progress = 1.0 - (current_steps_remaining / estimated_total_steps)
-    early_phase = 1.0 - progress
-    #Battery Logic#
+    
+    # Weights
+    w_score = 50.0 
+    w_task = 5.0  
+    w_batt = 2.0   
+
     def evaluate_robot_state(r):
         score_val = r.credit
+        # Battery Logic
         stations = env.charge_stations
         if stations:
             dist_to_station = min(manhattan_distance(r.position, s.position) for s in stations)
         else:
             dist_to_station = 10
-            
-        critical_threshold = dist_to_station + 3
-        if r.battery < critical_threshold:
-            battery_val = (r.battery - critical_threshold - 5) * 1.5 
-        elif r.battery >= current_steps_remaining:
-            battery_val = 0 
+        critical = r.battery - dist_to_station
+        if critical > 5:
+            battery_val = critical * 0.5 
         else:
-            battery_val = r.battery * 0.5 * early_phase
-    #Task Logic#
+            battery_val = (critical * 2.0) - 7.5 
+
+        #Task Logic
         task_val = 0
-        center = (2, 2)
         future_packages = [p for p in env.packages if not p.on_board]
         if r.package is not None:
             dist_dest = manhattan_distance(r.position, r.package.destination)
             reward = manhattan_distance(r.package.position, r.package.destination) * 2
-            dist_center = manhattan_distance(r.package.destination, center)
-            center_penalty = dist_center * 0.1
             future_bonus = 0
             if future_packages:
                 min_dist_future = min(manhattan_distance(r.package.destination, fp.position) for fp in future_packages)
                 future_bonus = (10 - min_dist_future) * 0.1 
-            
-            task_val = ((reward - dist_dest) * (1.0 - center_penalty) + future_bonus) * 2.0
+            task_val = (reward - dist_dest + future_bonus) * 2.0
             
         else:
             available_packages = [p for p in env.packages if p.on_board]
@@ -54,25 +47,23 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
                 dist_to_pkg = manhattan_distance(r.position, p.position)
                 dist_to_dest = manhattan_distance(p.position, p.destination)
                 reward = dist_to_dest * 2
-                dist_center = manhattan_distance(p.destination, center)
-                center_penalty = dist_center * 0.1
                 future_bonus = 0
                 if future_packages:
                     min_dist_future = min(manhattan_distance(p.destination, fp.position) for fp in future_packages)
                     future_bonus = (10 - min_dist_future) * 0.2
-                
-                val = (reward - (dist_to_pkg + dist_to_dest)) * (1.0 - center_penalty) + future_bonus
+                val = reward - (dist_to_pkg + dist_to_dest) + future_bonus
                 if val > best_pkg_val:
                     best_pkg_val = val
+            if available_packages:
+                task_val = best_pkg_val
+            else:
+                task_val = 0
             
-            task_val = best_pkg_val
-            
-        return (score_val * w1) + (battery_val * w2) + (task_val * w3)
+        return (score_val * w_score) + (battery_val * w_batt) + (task_val * w_task)
 
     my_utility = evaluate_robot_state(robot)
     opp_utility = evaluate_robot_state(other_robot)
-    to_return = my_utility - opp_utility
-    #print("heuristic val is: " + str(to_return))
+    print ("utilty: " + str(my_utility) + "opp utility" + str(opp_utility))
     return my_utility - opp_utility
 
 
@@ -84,50 +75,55 @@ class AgentGreedyImproved(AgentGreedy):
 class AgentMinimax(Agent):
     def run_state_minimax(self, env: WarehouseEnv, agent_id, am_i_max: bool,
                           depth: int, best_val, start_time, run_limit):
-        #print ("depth is: " + str(depth))
         if (time.time() - start_time) > run_limit:
             raise TimeoutError
-        if (depth == 0):
-            return (None, smart_heuristic(env, agent_id))
-        if (am_i_max):
+        if depth == 0:
+            val = smart_heuristic(env, agent_id)
+            if not am_i_max:
+                val = -val
+            return (None, val)
+        if am_i_max:
+            current_best = (None, -math.inf) 
             for op in env.get_legal_operators(agent_id):
                 child_env = env.clone()
                 child_env.apply_operator(agent_id, op)
-                child_val = self.run_state_minimax(child_env,(agent_id+1)%2,
-                                                False, depth - 1, (op, math.inf), start_time, run_limit)
-                if (child_val[1] > best_val[1]):
-                    #print ("ok\n")
-                    best_val = (op, child_val[1])
-            return best_val
+                
+                child_res = self.run_state_minimax(child_env, (agent_id + 1) % 2,
+                                                False, depth - 1, (None, math.inf), start_time, run_limit)
+                
+                if child_res[1] > current_best[1]:
+                    current_best = (op, child_res[1])
+            return current_best
+            
         else:
+            current_best = (None, math.inf) 
             for op in env.get_legal_operators(agent_id):
                 child_env = env.clone()
                 child_env.apply_operator(agent_id, op)
-                child_val = self.run_state_minimax(child_env,(agent_id+1)%2, True, depth - 1,
-                                                (op, -math.inf), start_time, run_limit)
-                if (child_val[1] < best_val[1]):
-                    best_val = (op, child_val[1])
-            #print ("best_op was: " + str(best_val[0]) + " value was: " + str(best_val[1]))
-            return best_val
-
-
+                
+                child_res = self.run_state_minimax(child_env, (agent_id + 1) % 2,
+                                                True, depth - 1, (None, -math.inf), start_time, run_limit)
+                
+                if child_res[1] < current_best[1]:
+                    current_best = (op, child_res[1])
+            return current_best
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
         start_time = time.time()
-        run_limit = time_limit - 0.1 #tenth of a second as safety margin
+        run_limit = time_limit - 0.1 
+        best_move = None
         i = 0
         try:
-            while(True):
+            while True:
                 i += 1
-                best_move = self.run_state_minimax(env, agent_id, (agent_id +1)%2, i,
+                current_best = self.run_state_minimax(env, agent_id, True, i,
                                                    (None, -math.inf), start_time, run_limit)
-                print("current_best in depth: "+str(i)+" is: "+ str(best_move[0]+" val is: "+str(best_move[1])))
+                best_move = current_best[0]
         except TimeoutError:
             pass
-        #print ("move_val was: " + str(best_move[1]))
-        if (best_move[0] == None):
-            return random.choice(env.get_legal_operators(agent_id)) #to make sure we have default operator to return if time_out
+        if best_move is None:
+            return random.choice(env.get_legal_operators(agent_id)) 
         else:
-            return best_move[0]
+            return best_move
 
 
 class AgentAlphaBeta(Agent):

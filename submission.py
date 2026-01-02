@@ -6,7 +6,6 @@ import math
 
 
 def smart_heuristic(env: WarehouseEnv, robot_id: int):
-    print("value robot\n")
     robot = env.get_robot(robot_id)
     other_robot = env.get_robot((robot_id + 1) % 2)
     def value_robot(env: WarehouseEnv, robot):

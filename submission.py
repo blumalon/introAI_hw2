@@ -9,15 +9,15 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     robot = env.get_robot(robot_id)
     other_robot = env.get_robot((robot_id + 1) % 2)
     # Weights
-    w_score = 20.0
+    w_score = 35.0
     w_task = 5.0  
-    w_batt = 10.0   
+    w_batt = 8.0   
     current_steps_remaining = env.num_steps
     estimated_total_steps = 200 
     progress = 1.0 - (current_steps_remaining / estimated_total_steps)
     early_phase = 1.0 - progress
     def evaluate_robot_state(r):
-        score_val = r.credit
+        score_val = r.credit - env.get_robot((robot_id + 1) % 2).credit
         # Battery Logic
         stations = env.charge_stations
         if stations:
@@ -26,7 +26,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
             dist_to_station = 10 
         critical_threshold = dist_to_station + 2
         if r.battery < critical_threshold and r.credit > 0:
-            battery_val = (r.battery - critical_threshold - 5) * 2 
+            battery_val = (r.battery - critical_threshold - 5) * 2
         elif r.battery >= current_steps_remaining:
             battery_val = 0 
         else:
@@ -36,13 +36,13 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
         task_val = 0
         future_packages = [p for p in env.packages if not p.on_board]
         if r.package is not None:
-            dist_dest = manhattan_distance(r.position, r.package.destination)
+            dist_dest = manhattan_distance(r.position, r.package.destination) 
             reward = manhattan_distance(r.package.position, r.package.destination) * 2
-            task_val = (reward - dist_dest) * 2.0
-            
+            #print ("reward: " + str(reward) + " distance: " + str(dist_dest))
+            task_val = (reward - dist_dest) * 6.0 
         else:
             available_packages = [p for p in env.packages if p.on_board]
-            best_pkg_val = float("-inf")
+            best_pkg_val = 0
             for p in available_packages:
                 dist_to_pkg = manhattan_distance(r.position, p.position)
                 dist_to_dest = manhattan_distance(p.position, p.destination)
@@ -50,8 +50,8 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
                 future_bonus = 0
                 if future_packages:
                     min_dist_future = min(manhattan_distance(p.destination, fp.position) for fp in future_packages)
-                    future_bonus = (10 - min_dist_future) * 0.2
-                val = reward - (dist_to_pkg + dist_to_dest) + future_bonus
+                    future_bonus = (10 - min_dist_future) * 0.1
+                val = reward - (dist_to_pkg + dist_to_dest* 0.7)  + future_bonus
                 if val > best_pkg_val:
                     best_pkg_val = val
             if available_packages:
@@ -125,6 +125,9 @@ class AgentMinimax(Agent):
         if best_move is None:
             return random.choice(env.get_legal_operators(agent_id)) 
         else:
+            if env.get_robot(agent_id).credit > env.get_robot((agent_id + 1) % 2).credit and env.get_robot((agent_id + 1) % 2).battery == 0:
+                if str(best_move) == "charge":
+                    return random.choice(env.get_legal_operators(agent_id)) 
             return best_move
 
 

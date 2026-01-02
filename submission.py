@@ -78,9 +78,13 @@ class AgentMinimax(Agent):
                           depth: int, best_val, start_time, run_limit):
         if (time.time() - start_time) > run_limit:
             raise TimeoutError
+            
         if depth == 0:
             val = smart_heuristic(env, agent_id)
+            if not am_i_max:
+                val = -val
             return (None, val)
+            
         if am_i_max:
             current_best = (None, -math.inf) 
             for op in env.get_legal_operators(agent_id):
@@ -106,6 +110,7 @@ class AgentMinimax(Agent):
                 if child_res[1] < current_best[1]:
                     current_best = (op, child_res[1])
             return current_best
+
     def run_step(self, env: WarehouseEnv, agent_id, time_limit):
         start_time = time.time()
         run_limit = time_limit - 0.1 
@@ -133,7 +138,10 @@ class AgentAlphaBeta(Agent):
             raise TimeoutError
             
         if depth == 0:
-            return (None, smart_heuristic(env, agent_id))
+            val = smart_heuristic(env, agent_id)
+            if not am_i_max:
+                val = -val
+            return (None, val)
             
         best_op = None
         

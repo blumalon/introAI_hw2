@@ -8,11 +8,10 @@ import math
 def smart_heuristic(env: WarehouseEnv, robot_id: int):
     robot = env.get_robot(robot_id)
     other_robot = env.get_robot((robot_id + 1) % 2)
-    
     # Weights
     w_score = 20.0
-    w_task = 12.0  
-    w_batt = 8.0   
+    w_task = 5.0  
+    w_batt = 10.0   
     current_steps_remaining = env.num_steps
     estimated_total_steps = 200 
     progress = 1.0 - (current_steps_remaining / estimated_total_steps)
@@ -25,10 +24,9 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
             dist_to_station = min(manhattan_distance(r.position, s.position) for s in stations)
         else:
             dist_to_station = 10 
-        critical_threshold = dist_to_station + 3
-        
-        if r.battery < critical_threshold:
-            battery_val = (r.battery - critical_threshold - 5) * 1.5 
+        critical_threshold = dist_to_station + 2
+        if r.battery < critical_threshold and r.credit > 0:
+            battery_val = (r.battery - critical_threshold - 5) * 2 
         elif r.battery >= current_steps_remaining:
             battery_val = 0 
         else:

@@ -11,7 +11,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     
     # Weights
     w_score = 20.0
-    w_task = 5.0  
+    w_task = 12.0  
     w_batt = 8.0   
     current_steps_remaining = env.num_steps
     estimated_total_steps = 200 
@@ -60,8 +60,8 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
                 task_val = best_pkg_val
             else:
                 task_val = 0
-        print ("score val: " + str(score_val) + " battery val: " + str(battery_val) + " task val: " + str(task_val))
-        return (score_val * w_score) + (battery_val * w_batt)* (score_val/(score_val+battery_val)) + (task_val * w_task)
+        #print ("score val: " + str(score_val) + " battery val: " + str(battery_val) + " task val: " + str(task_val))
+        return (score_val * w_score) + (battery_val * w_batt) + (task_val * w_task)
 
     my_utility = evaluate_robot_state(robot)
     opp_utility = evaluate_robot_state(other_robot)

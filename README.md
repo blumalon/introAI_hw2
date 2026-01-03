@@ -10,7 +10,7 @@ GreedyImproved - (38-35-27)
 Expectimax:
 Greedy - (92-0-8)
 GreedyImproved - (52-35-13)
-MiniMax -()
+MiniMax -(34-44-22)
 
 Alphabeta:
 Greedy - (80-0-20)

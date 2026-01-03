@@ -14,8 +14,7 @@ def smart_heuristic(env: WarehouseEnv, robot_id: int):
     w_batt = 20.0   
     current_steps_remaining = env.num_steps
     estimated_total_steps = 200 
-    progress = 1.0 - (current_steps_remaining / estimated_total_steps)
-    early_phase = 1.0 - progress
+    early_phase = min(1.0, current_steps_remaining / estimated_total_steps)
     def evaluate_robot_state(r):
         score_val = r.credit
         # Battery Logic
